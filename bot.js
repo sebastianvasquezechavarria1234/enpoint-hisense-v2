@@ -269,10 +269,6 @@ async function procesarEncuesta(registro = {}) {
       await page.type('[id="QR~QID13~5~TEXT"]', posibleEncuestaOtro, { delay: 40 });
     }
 
-    await page.waitForSelector('#NextButton', { timeout: 30000 });
-    await page.click('#NextButton');
-    await new Promise(r => setTimeout(r, 4000));
-
     let caminoEjecutado = '';
 
     // ==========================================
@@ -280,32 +276,40 @@ async function procesarEncuesta(registro = {}) {
     // ==========================================
     if (posibleEncuesta === '2') {
       // ------------------------------------------
-      // CAMINO A: NO HAY RESPUESTA (Termina directo)
+      // CAMINO A: NO HAY RESPUESTA
       // ------------------------------------------
-      caminoEjecutado = 'No hay respuesta (Cierre directo de formulario)';
-      console.log('[BOT] Camino: No hay respuesta. Formulario finalizado directamente.');
+      // En Qualtrics, hacer click en #NextButton con esta opción envía inmediatamente el formulario a la base de datos.
+      // BLOQUEADO: Selecciona la opción en pantalla pero NO envía el formulario para evitar registros reales.
+      caminoEjecutado = 'No hay respuesta (Opción marcada en pantalla - ENVÍO BLOQUEADO por seguridad)';
+      console.log('[BOT] Paso 2: Opción "No hay respuesta" seleccionada en pantalla.');
+      console.log('[BOT] [SEGURIDAD] Click en Enviar BLOQUEADO para no registrar datos en Qualtrics.');
 
-    } else if (posibleEncuesta === '3' || posibleEncuesta === '4' || posibleEncuesta === '5') {
-      // ------------------------------------------
-      // CAMINO B: REPROGRAMAR / NO INTERESA / OTRO (Salta a Comentarios)
-      // ------------------------------------------
-      caminoEjecutado = 'Encuesta cerrada anticipadamente con comentarios';
-      console.log('[BOT] Camino: Cierre anticipado. Pasando a comentarios finales...');
-      await page.waitForSelector('[id="QR~QID11"]', { timeout: 30000 });
-      if (comentarioFinal) {
-        await page.click('[id="QR~QID11"]');
-        await page.type('[id="QR~QID11"]', comentarioFinal, { delay: 30 });
-      }
-
+    } else {
       await page.waitForSelector('#NextButton', { timeout: 30000 });
       await page.click('#NextButton');
-      await new Promise(r => setTimeout(r, 5000));
+      await new Promise(r => setTimeout(r, 4000));
 
-    } else if (posibleEncuesta === '1') {
-      // ------------------------------------------
-      // CAMINO C: SI ESTOY (Encuesta Completa)
-      // ------------------------------------------
-      const notaFinal = calificacion !== null ? calificacion : 10;
+      if (posibleEncuesta === '3' || posibleEncuesta === '4' || posibleEncuesta === '5') {
+        // ------------------------------------------
+        // CAMINO B: REPROGRAMAR / NO INTERESA / OTRO (Salta a Comentarios)
+        // ------------------------------------------
+        caminoEjecutado = 'Encuesta cerrada anticipadamente con comentarios (SIN ENVIAR)';
+        console.log('[BOT] Camino: Cierre anticipado. Pasando a comentarios finales...');
+        await page.waitForSelector('[id="QR~QID11"]', { timeout: 30000 });
+        if (comentarioFinal) {
+          await page.click('[id="QR~QID11"]');
+          await page.type('[id="QR~QID11"]', comentarioFinal, { delay: 30 });
+        }
+
+        console.log('[BOT] [SEGURIDAD] Comentario final ingresado.');
+        console.log('[BOT] [SEGURIDAD] Click final en Enviar (#NextButton) BLOQUEADO para no enviar al cliente.');
+        // BLOQUEADO: await page.click('#NextButton');
+
+      } else if (posibleEncuesta === '1') {
+        // ------------------------------------------
+        // CAMINO C: SI ESTOY (Encuesta Completa)
+        // ------------------------------------------
+        const notaFinal = calificacion !== null ? calificacion : 10;
       console.log(`[BOT] Paso 3: Marcando Calificacion: ${notaFinal}...`);
       await seleccionarOpcion(page, 'QR~QID2', String(notaFinal));
 
@@ -400,7 +404,7 @@ async function procesarEncuesta(registro = {}) {
         await new Promise(r => setTimeout(r, 4000));
       }
 
-      // Paso 6: Comentario final y Entrega
+      // Paso 6: Comentario final (Detenido antes del envío)
       console.log('[BOT] Paso 6: Escribiendo comentario final (opcional)...');
       await page.waitForSelector('[id="QR~QID11"]', { timeout: 30000 });
       if (comentarioFinal) {
@@ -408,23 +412,26 @@ async function procesarEncuesta(registro = {}) {
         await page.type('[id="QR~QID11"]', comentarioFinal, { delay: 30 });
       }
 
-      console.log('[BOT] Paso 6: Haciendo click en Entregar (#NextButton)...');
-      await page.waitForSelector('#NextButton', { timeout: 30000 });
-      await page.click('#NextButton');
-      await new Promise(r => setTimeout(r, 5000));
+      console.log('[BOT] [SEGURIDAD] Todo el formulario fue completado hasta el comentario final.');
+      console.log('[BOT] [SEGURIDAD] Click en Entregar (#NextButton) BLOQUEADO para evitar registros al cliente.');
+      // BLOQUEADO PARA SEGURIDAD:
+      // await page.waitForSelector('#NextButton', { timeout: 30000 });
+      // await page.click('#NextButton');
+      // await new Promise(r => setTimeout(r, 5000));
+      await new Promise(r => setTimeout(r, 2000));
     }
-
-    const textoFinal = await page.evaluate(() => document.body ? document.body.innerText : '').catch(() => '');
-    const exitoRegistrado = textoFinal.includes('SU RESPUESTA HA SIDO REGISTRADA') || textoFinal.includes('agradecemos el tiempo');
+  }
 
     const tiempoTotalMs = Date.now() - inicioTiempo;
-    console.log(`[BOT] Proceso completado en ${Math.round(tiempoTotalMs / 1000)}s.`);
-    console.log(`[BOT] Estado registrado: ${exitoRegistrado ? 'SI' : 'NO'}\n`);
+    console.log(`[BOT] Proceso completado en modo seguro (sin envío) en ${Math.round(tiempoTotalMs / 1000)}s.`);
+    console.log('[BOT] Estado: Formulario rellenado con éxito, detenido antes de enviar.\n');
 
     return {
-      status: 'completado',
+      status: 'completado_sin_enviar',
+      modoPruebaSegura: true,
+      mensaje: 'Formulario completado en pantalla hasta el comentario. El botón de envío fue omitido para evitar registros al cliente.',
       idRegistroDb,
-      encuestaEntregada: exitoRegistrado,
+      encuestaEntregada: false,
       caminoEjecutado,
       ordenId,
       tiempoTotalMs,
