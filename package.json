@@ -1,0 +1,15 @@
+{
+  "name": "enpoint-hisense-v2",
+  "version": "2.0.0",
+  "description": "API automatizada para encuestas Hisense Qualtrics con endpoint y body unico tipo BD",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "puppeteer": "^22.12.0"
+  }
+}
